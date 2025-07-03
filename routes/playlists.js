@@ -1,17 +1,24 @@
 import express from "express";
 import db from "#db/client";
+import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
+
+// Apply authentication middleware to all playlist routes
+router.use(authenticateToken);
 
 // Helper function to validate ID parameter
 const validateId = (id) => {
   return !isNaN(id) && Number.isInteger(Number(id));
 };
 
-// GET /playlists - sends array of all playlists
+// GET /playlists - sends array of all playlists owned by the user
 router.get("/", async (req, res) => {
   try {
-    const result = await db.query("SELECT * FROM playlists ORDER BY id");
+    const result = await db.query(
+      "SELECT * FROM playlists WHERE user_id = $1 ORDER BY id",
+      [req.user.userId]
+    );
     res.json(result.rows);
   } catch (error) {
     console.error("Error fetching playlists:", error);
@@ -19,7 +26,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /playlists - creates a new empty playlist
+// POST /playlists - creates a new playlist owned by the user
 router.post("/", async (req, res) => {
   const { name, description } = req.body || {};
 
@@ -30,8 +37,8 @@ router.post("/", async (req, res) => {
 
   try {
     const result = await db.query(
-      "INSERT INTO playlists (name, description) VALUES ($1, $2) RETURNING *",
-      [name, description]
+      "INSERT INTO playlists (name, description, user_id) VALUES ($1, $2, $3) RETURNING *",
+      [name, description, req.user.userId]
     );
 
     res.status(201).json(result.rows[0]);
@@ -59,7 +66,14 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Playlist not found" });
     }
 
-    res.json(result.rows[0]);
+    const playlist = result.rows[0];
+
+    // Check if user owns the playlist
+    if (playlist.user_id !== req.user.userId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    res.json(playlist);
   } catch (error) {
     console.error("Error fetching playlist:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -84,6 +98,13 @@ router.get("/:id/tracks", async (req, res) => {
 
     if (playlistResult.rows.length === 0) {
       return res.status(404).json({ error: "Playlist not found" });
+    }
+
+    const playlist = playlistResult.rows[0];
+
+    // Check if user owns the playlist
+    if (playlist.user_id !== req.user.userId) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     // Get tracks in the playlist

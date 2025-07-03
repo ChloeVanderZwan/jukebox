@@ -2,11 +2,20 @@
 
 -- Create the jukebox database schema
 
+-- Create users table
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL
+);
+
 -- Create playlists table
 CREATE TABLE playlists (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  description TEXT NOT NULL
+  description TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Create tracks table
